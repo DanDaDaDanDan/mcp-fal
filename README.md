@@ -21,8 +21,8 @@ npm install && npm run build
 ### 3. Add to Claude Code
 
 ```bash
-claude mcp add --transport stdio fal \
-  --env FAL_KEY=your-api-key-here \
+claude mcp add -s user -t stdio mcp-fal \
+  -e FAL_KEY=your-api-key-here \
   -- node /path/to/mcp-fal/dist/index.js
 ```
 
@@ -31,7 +31,7 @@ Or manually add to your Claude Code MCP settings:
 ```json
 {
   "mcpServers": {
-    "fal": {
+    "mcp-fal": {
       "command": "node",
       "args": ["/path/to/mcp-fal/dist/index.js"],
       "env": {
