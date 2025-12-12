@@ -55,11 +55,11 @@ This is purely an implementation detail - users don't need to know about separat
 
 ## Environment Variables
 
-| Variable    | Required | Default | Description                    |
-|-------------|----------|---------|--------------------------------|
-| FAL_KEY     | Yes      | -       | fal.ai API key (or FAL_API_KEY)|
-| MCP_DEBUG   | No       | false   | Enable debug logging           |
-| MCP_LOG_DIR | No       | none    | Log directory                  |
+| Variable    | Required | Default  | Description                              |
+|-------------|----------|----------|------------------------------------------|
+| FAL_KEY     | Yes      | -        | fal.ai API key (or FAL_API_KEY)          |
+| MCP_DEBUG   | No       | true     | Debug logging; set to "false" to disable |
+| MCP_LOG_DIR | No       | ./logs   | Log directory; set to "none" to disable  |
 
 ## Error Handling
 

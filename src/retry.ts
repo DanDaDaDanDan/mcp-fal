@@ -58,12 +58,21 @@ export async function withRetry<T>(
       lastError = error;
 
       if (attempt === opts.maxRetries || !isRetryable(error, opts.retryableErrors)) {
+        logger.warn("Retry exhausted or non-retryable error", {
+          attempt: attempt + 1,
+          maxRetries: opts.maxRetries,
+          isRetryable: isRetryable(error, opts.retryableErrors),
+          error: error instanceof Error ? error.message : String(error),
+        });
         throw error;
       }
 
-      logger.warn(
-        `Attempt ${attempt + 1} failed, retrying in ${delay}ms: ${error instanceof Error ? error.message : String(error)}`
-      );
+      logger.info("Retrying after transient error", {
+        attempt: attempt + 1,
+        maxRetries: opts.maxRetries,
+        delayMs: delay,
+        error: error instanceof Error ? error.message : String(error),
+      });
 
       await sleep(delay);
       delay = Math.min(delay * opts.backoffMultiplier, opts.maxDelayMs);
@@ -80,7 +89,10 @@ export async function withTimeout<T>(
   return Promise.race([
     fn(),
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error("TIMEOUT: Operation timed out")), timeoutMs)
+      setTimeout(
+        () => reject(new Error(`TIMEOUT: Operation timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      )
     ),
   ]);
 }

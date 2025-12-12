@@ -258,8 +258,8 @@ async function main() {
   logger.info("Starting MCP server", {
     version: "1.0.0",
     falConfigured: !!FAL_KEY,
-    debugMode: process.env.MCP_DEBUG === "true",
-    logDir: process.env.MCP_LOG_DIR || "none",
+    debugMode: process.env.MCP_DEBUG !== "false",
+    logDir: process.env.MCP_LOG_DIR ?? "logs",
   });
 
   await server.connect(transport);

@@ -1,14 +1,21 @@
 /**
- * Logger utility for mcp-fal
- * Logs to stderr (stdout is reserved for MCP protocol) and optionally to files
+ * Logging utility for the MCP fal.ai server
+ *
+ * Logs to stderr (stdout is reserved for MCP protocol) and optionally
+ * to a log file for usage tracking.
  */
 
-import { existsSync, mkdirSync, appendFileSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 
-type LogLevel = "debug" | "info" | "warn" | "error";
+export interface LogEntry {
+  timestamp: string;
+  level: "info" | "warn" | "error" | "debug";
+  event: string;
+  details?: Record<string, unknown>;
+}
 
-interface UsageLogEntry {
+export interface UsageEntry {
   timestamp: string;
   model: string;
   type: "image";
@@ -18,68 +25,106 @@ interface UsageLogEntry {
 }
 
 class Logger {
-  private debugEnabled: boolean;
-  private logDir: string | null;
+  private logFile: string | null = null;
+  private usageFile: string | null = null;
+  private debug: boolean = false;
 
   constructor() {
-    this.debugEnabled = process.env.MCP_DEBUG === "true";
-    const logDirEnv = process.env.MCP_LOG_DIR;
-    this.logDir = logDirEnv === "none" ? null : logDirEnv || null;
+    // Debug mode: default to true, can be disabled with MCP_DEBUG=false
+    this.debug = process.env.MCP_DEBUG !== "false";
 
-    if (this.logDir && !existsSync(this.logDir)) {
+    // Log directory: default to ./logs, can be overridden or disabled with MCP_LOG_DIR=none
+    const logDir = process.env.MCP_LOG_DIR ?? "logs";
+    if (logDir === "none") {
+      return;
+    }
+    try {
+      if (!existsSync(logDir)) {
+        mkdirSync(logDir, { recursive: true });
+      }
+      this.logFile = join(logDir, "mcp-fal.log");
+      this.usageFile = join(logDir, "usage.jsonl");
+      this.info("Logger initialized", { logDir, logFile: this.logFile, usageFile: this.usageFile });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[mcp-fal] Failed to initialize log files: ${message}`);
+    }
+  }
+
+  private formatEntry(entry: LogEntry): string {
+    const parts = [`[${entry.timestamp}]`, `[${entry.level.toUpperCase()}]`, entry.event];
+    if (entry.details) {
+      parts.push(JSON.stringify(entry.details));
+    }
+    return parts.join(" ");
+  }
+
+  private log(level: LogEntry["level"], event: string, details?: Record<string, unknown>): void {
+    const entry: LogEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      event,
+      details,
+    };
+
+    // Always log to stderr for visibility
+    const message = this.formatEntry(entry);
+    if (level === "error") {
+      console.error(`[mcp-fal] ${message}`);
+    } else if (level === "warn") {
+      console.error(`[mcp-fal] ${message}`);
+    } else if (this.debug || level === "info") {
+      console.error(`[mcp-fal] ${message}`);
+    }
+
+    // Log to file if configured
+    if (this.logFile) {
       try {
-        mkdirSync(this.logDir, { recursive: true });
+        appendFileSync(this.logFile, message + "\n");
       } catch {
-        // Fail silently - file logging is optional
-        this.logDir = null;
+        // Silently fail file logging
       }
     }
   }
 
-  private formatMessage(level: LogLevel, message: string, data?: object): string {
-    const timestamp = new Date().toISOString();
-    const dataStr = data ? ` ${JSON.stringify(data)}` : "";
-    return `[${timestamp}] [${level.toUpperCase()}] ${message}${dataStr}`;
+  info(event: string, details?: Record<string, unknown>): void {
+    this.log("info", event, details);
   }
 
-  private writeToFile(filename: string, content: string): void {
-    if (!this.logDir) return;
-    try {
-      appendFileSync(join(this.logDir, filename), content + "\n");
-    } catch {
-      // Fail silently
+  warn(event: string, details?: Record<string, unknown>): void {
+    this.log("warn", event, details);
+  }
+
+  error(event: string, details?: Record<string, unknown>): void {
+    this.log("error", event, details);
+  }
+
+  debugLog(event: string, details?: Record<string, unknown>): void {
+    if (this.debug) {
+      this.log("debug", event, details);
     }
   }
 
-  debugLog(message: string, data?: object): void {
-    if (!this.debugEnabled) return;
-    const formatted = this.formatMessage("debug", message, data);
-    console.error(formatted);
-    this.writeToFile("mcp-fal.log", formatted);
-  }
+  /**
+   * Log usage statistics for a generation request
+   */
+  logUsage(entry: UsageEntry): void {
+    // Log summary to stderr
+    const summary = entry.success
+      ? `image generation complete: ${entry.model}, ${entry.durationMs}ms`
+      : `image generation failed: ${entry.model}, ${entry.error}`;
+    this.info(summary);
 
-  info(message: string, data?: object): void {
-    const formatted = this.formatMessage("info", message, data);
-    console.error(formatted);
-    this.writeToFile("mcp-fal.log", formatted);
-  }
-
-  warn(message: string, data?: object): void {
-    const formatted = this.formatMessage("warn", message, data);
-    console.error(formatted);
-    this.writeToFile("mcp-fal.log", formatted);
-  }
-
-  error(message: string, data?: object): void {
-    const formatted = this.formatMessage("error", message, data);
-    console.error(formatted);
-    this.writeToFile("mcp-fal.log", formatted);
-  }
-
-  logUsage(entry: UsageLogEntry): void {
-    this.writeToFile("usage.jsonl", JSON.stringify(entry));
+    // Log detailed usage to file if configured
+    if (this.usageFile) {
+      try {
+        appendFileSync(this.usageFile, JSON.stringify(entry) + "\n");
+      } catch {
+        // Silently fail file logging
+      }
+    }
   }
 }
 
-// Singleton instance
+// Export singleton instance
 export const logger = new Logger();

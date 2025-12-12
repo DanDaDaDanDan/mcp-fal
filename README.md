@@ -79,8 +79,8 @@ List available models and their capabilities.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `FAL_KEY` | ✓ | - | fal.ai API key (also accepts `FAL_API_KEY`) |
-| `MCP_DEBUG` | | `false` | Debug logging; set to `"true"` to enable |
-| `MCP_LOG_DIR` | | none | Log directory; set path to enable file logging |
+| `MCP_DEBUG` | | `true` | Debug logging; set to `"false"` to disable |
+| `MCP_LOG_DIR` | | `./logs` | Log directory; set to `"none"` to disable |
 
 ## Model Details
 
