@@ -53,21 +53,54 @@ Generate images using Nano Banana or Nano Banana Pro. Supports text-to-image gen
 | `prompt` | string | ✓ | Image description or editing instruction |
 | `output_path` | string | ✓ | Where to save the image |
 | `model` | `"nano-banana"` \| `"nano-banana-pro"` | | Model (default: `"nano-banana"`) |
-| `reference_images` | string[] | | URLs of images for editing/composition |
+| `reference_images` | string[] | | Reference images for editing/composition (see formats below) |
 | `aspect_ratio` | string | | e.g., `"16:9"`, `"1:1"`, `"auto"` |
 
 **Max reference images:** 3 for nano-banana, 14 for nano-banana-pro
 
 **Supported aspect ratios:** 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9, auto (edit only)
 
-**Example:**
+#### Reference Image Formats
+
+The `reference_images` parameter accepts three formats:
+
+1. **URLs** - Publicly accessible image URLs
+   ```json
+   ["https://example.com/photo.jpg"]
+   ```
+
+2. **Local file paths** - Absolute paths to local image files (automatically uploaded to fal.ai storage)
+   ```json
+   ["D:/images/photo.png", "/home/user/image.jpg"]
+   ```
+
+3. **Data URLs** - Base64-encoded images (automatically uploaded to fal.ai storage)
+   ```json
+   ["data:image/png;base64,iVBORw0KGgo..."]
+   ```
+
+**Supported image formats:** PNG, JPEG, GIF, WebP, BMP
+
+#### Examples
+
+**Text-to-image generation:**
 ```
 Use generate_image to create a sunset over mountains, save to /tmp/sunset.png
 ```
 
-**Editing example:**
+**Image editing with URL:**
 ```
-Use generate_image with reference_images=["https://example.com/photo.jpg"] to make the person wear a hat
+Use generate_image with reference_images=["https://example.com/photo.jpg"] to add a hat to the person
+```
+
+**Image editing with local file:**
+```
+Use generate_image with reference_images=["D:/photos/portrait.png"] to change the background to a beach
+```
+
+**Style transfer with multiple references:**
+```
+Use generate_image with reference_images=["style.png", "content.jpg"] to apply the style to the content image
 ```
 
 ### list_models

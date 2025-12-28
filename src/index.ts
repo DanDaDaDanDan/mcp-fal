@@ -88,7 +88,7 @@ const TOOLS = [
           type: "array",
           items: { type: "string" },
           description:
-            "URLs of reference images for editing, composition, or style transfer. Max 3 for nano-banana, max 14 for nano-banana-pro.",
+            "Reference images for editing, composition, or style transfer. Accepts URLs (https://...), local file paths, or data URLs (data:image/...). Local files and data URLs are automatically uploaded. Max 3 for nano-banana, max 14 for nano-banana-pro.",
         },
         aspect_ratio: {
           type: "string",
@@ -120,8 +120,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
   const { name, arguments: args } = request.params;
 
+  logger.info("Tool request received", {
+    tool: name,
+    hasArguments: !!args,
+    argumentKeys: args ? Object.keys(args) : [],
+  });
+
   // List models tool
   if (name === "list_models") {
+    logger.debugLog("Handling list_models request");
     const models = [];
 
     models.push({
@@ -133,6 +140,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       available: true,
     });
 
+    logger.debugLog("list_models response", { modelCount: models.length });
     return {
       content: [
         {
@@ -159,8 +167,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       aspect_ratio?: string;
     };
 
+    logger.info("generate_image request details", {
+      promptLength: prompt?.length || 0,
+      promptPreview: prompt ? prompt.substring(0, 100) + (prompt.length > 100 ? "..." : "") : "(empty)",
+      outputPath,
+      model: model || "nano-banana (default)",
+      referenceImageCount: referenceImages?.length || 0,
+      referenceImageTypes: referenceImages?.map((img) => {
+        if (img.startsWith("data:")) return "data_url";
+        if (img.startsWith("http://") || img.startsWith("https://")) return "url";
+        return "local_file";
+      }),
+      aspectRatio: aspectRatio || "(default)",
+    });
+
     // Validate prompt
     if (!prompt || prompt.trim().length === 0) {
+      logger.warn("generate_image validation failed: empty prompt");
       return {
         content: [
           {
@@ -174,6 +197,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
     // Validate output path
     if (!outputPath || outputPath.trim().length === 0) {
+      logger.warn("generate_image validation failed: empty output_path");
       return {
         content: [
           {
@@ -187,6 +211,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
     // Validate model if provided
     if (model && !isSupportedImageModel(model)) {
+      logger.warn("generate_image validation failed: invalid model", { model });
       return {
         content: [
           {
@@ -199,12 +224,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     }
 
     try {
+      logger.debugLog("Calling imageProvider.generate");
       const result = await imageProvider.generate({
         prompt,
         outputPath,
         model,
         referenceImages,
         aspectRatio: aspectRatio as any,
+      });
+
+      logger.info("generate_image completed successfully", {
+        imagePath: result.imagePath,
+        model: result.model,
+        durationMs: result.usage?.durationMs,
       });
 
       // Return successful result
@@ -224,7 +256,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error("Image generation failed", { error: errorMessage });
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      logger.error("generate_image failed", {
+        error: errorMessage,
+        stack: errorStack,
+        prompt: prompt.substring(0, 100) + "...",
+        outputPath,
+        model,
+        referenceImageCount: referenceImages?.length || 0,
+      });
 
       return {
         content: [
@@ -239,6 +279,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
   }
 
   // Unknown tool
+  logger.warn("Unknown tool requested", { tool: name });
   return {
     content: [
       {

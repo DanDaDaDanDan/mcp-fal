@@ -20,11 +20,15 @@ src/
 
 2. **Transparent endpoint routing**: fal.ai exposes separate endpoints for text-to-image (`fal-ai/nano-banana`) and editing (`fal-ai/nano-banana/edit`), but the underlying model is the same. This MCP abstracts that away - users just use `generate_image` with optional `reference_images`.
 
-3. **Fail fast**: Provider is created at startup; fails fast if FAL_KEY is missing.
+3. **Automatic reference image handling**: Reference images can be URLs, local file paths, or data URLs. Local files and data URLs are automatically uploaded to fal.ai storage before being used.
 
-4. **Structured errors**: Errors are categorized (AUTH_ERROR, RATE_LIMIT, etc.) for actionable feedback.
+4. **Fail fast**: Provider is created at startup; fails fast if FAL_KEY is missing.
 
-5. **Local file saving**: fal.ai returns image URLs; we download and save to the specified output path.
+5. **Structured errors**: Errors are categorized (AUTH_ERROR, RATE_LIMIT, INVALID_REQUEST, etc.) for actionable feedback.
+
+6. **Local file saving**: fal.ai returns image URLs; we download and save to the specified output path.
+
+7. **Comprehensive logging**: All operations are logged with detailed context for debugging.
 
 ## fal.ai API Endpoint Routing
 
@@ -61,6 +65,32 @@ This is purely an implementation detail - users don't need to know about separat
 | MCP_DEBUG   | No       | true     | Debug logging; set to "false" to disable |
 | MCP_LOG_DIR | No       | ./logs   | Log directory; set to "none" to disable  |
 
+## Reference Image Processing
+
+When `reference_images` is provided, the server detects the input type and processes accordingly:
+
+| Input Type | Detection | Processing |
+|------------|-----------|------------|
+| URL | Starts with `http://` or `https://` | Used directly |
+| Local file | Any other path | Read file → Upload to fal.ai storage |
+| Data URL | Starts with `data:` | Parse base64 → Upload to fal.ai storage |
+
+**Supported image formats:** PNG, JPEG, GIF, WebP, BMP
+
+### Processing Flow
+
+1. Each reference image input is analyzed to determine its type
+2. URLs are passed through directly to fal.ai
+3. Local files are read, validated, and uploaded to fal.ai storage via `fal.storage.upload()`
+4. Data URLs are parsed, converted to buffers, and uploaded to fal.ai storage
+5. All resulting URLs are passed to the edit endpoint as `image_urls`
+
+### Common Errors
+
+- `Reference image file not found: <path>` - Local file doesn't exist
+- `Invalid data URL format` - Data URL is malformed
+- `TIMEOUT: Operation timed out after 30000ms` - Upload took too long (30s per image)
+
 ## Error Handling
 
 Errors are categorized and returned with actionable messages:
@@ -68,6 +98,7 @@ Errors are categorized and returned with actionable messages:
 - `RATE_LIMIT`: Too many requests
 - `CONTENT_BLOCKED`: Safety filter triggered
 - `TIMEOUT`: Operation took too long
+- `INVALID_REQUEST`: Unprocessable entity (e.g., invalid image format)
 - `GENERATION_ERROR`: Generic failure
 
 ## Retry Logic
@@ -76,3 +107,16 @@ Errors are categorized and returned with actionable messages:
 - Initial delay: 1s, max delay: 30s
 - Retryable: rate limits, 429/502/503, connection errors
 - Generation timeout: 3 minutes
+- Upload timeout: 30 seconds per reference image
+
+## Logging
+
+Comprehensive logging is enabled by default. Key log events:
+
+- `=== Image Generation Request ===` - Start of generation with all parameters
+- `Processing reference images` - Reference image processing begins
+- `Reference image X: Uploading local file` - Local file being uploaded
+- `Calling fal.ai API` - API call starting
+- `fal.ai API call completed` - API call finished
+- `=== Image Generation Complete ===` - Successful completion with timing
+- `=== Image Generation Failed ===` - Error with full context
