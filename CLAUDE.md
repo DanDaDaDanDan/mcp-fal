@@ -1,6 +1,30 @@
-# mcp-fal Developer Documentation
+# mcp-fal
 
-MCP server for fal.ai image generation using Nano Banana models.
+MCP server providing Claude Code access to fal.ai image generation (Nano Banana models).
+
+## Philosophy
+
+1. **Fail fast** - Surface errors immediately with clear messages. Don't silently swallow failures or return partial results.
+2. **Don't guess, research** - When API behavior is unclear, check the docs. Model IDs and parameters change; verify against https://fal.ai/docs
+3. **Eager initialization** - Create provider instances at startup. Fail at init, not use-time.
+4. **Structured errors** - Categorize errors (AUTH_ERROR, RATE_LIMIT, CONTENT_BLOCKED, TIMEOUT) for actionable feedback.
+5. **Unified interface** - Hide API complexity (separate endpoints for text-to-image vs editing) behind a single intuitive tool.
+
+## SDK
+
+Uses `@fal-ai/client` for fal.ai API access.
+
+**Required version:**
+- `@fal-ai/client`: ^1.3.0
+
+## Models
+
+| Friendly Name | API Model ID | Type | Max Refs | Resolution |
+|---------------|--------------|------|----------|------------|
+| nano-banana | `fal-ai/nano-banana` | Image (fast) | 3 | 1K |
+| nano-banana-pro | `fal-ai/nano-banana-pro` | Image (high-quality) | 14 | 1K/2K/4K |
+
+**Default model:** `nano-banana` - Fast and cost-effective.
 
 ## Architecture
 
@@ -91,15 +115,17 @@ When `reference_images` is provided, the server detects the input type and proce
 - `Invalid data URL format` - Data URL is malformed
 - `TIMEOUT: Operation timed out after 30000ms` - Upload took too long (30s per image)
 
-## Error Handling
+## Error Categories
 
-Errors are categorized and returned with actionable messages:
-- `AUTH_ERROR`: Invalid/missing API key
-- `RATE_LIMIT`: Too many requests
-- `CONTENT_BLOCKED`: Safety filter triggered
-- `TIMEOUT`: Operation took too long
-- `INVALID_REQUEST`: Unprocessable entity (e.g., invalid image format)
-- `GENERATION_ERROR`: Generic failure
+| Category | HTTP Status | Meaning |
+|----------|-------------|---------|
+| AUTH_ERROR | 401 | Invalid or missing fal.ai API key |
+| RATE_LIMIT | 429 | API quota exceeded |
+| SAFETY_BLOCK | 400 | Blocked by safety filter |
+| CONTENT_BLOCKED | 400 | Content policy violation |
+| TIMEOUT | - | Request exceeded timeout |
+| VALIDATION_ERROR | 422 | Invalid input parameters (e.g., bad image format) |
+| API_ERROR | 4xx/5xx | Other API errors |
 
 ## Retry Logic
 

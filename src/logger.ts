@@ -17,11 +17,18 @@ export interface LogEntry {
 
 export interface UsageEntry {
   timestamp: string;
+  provider: "xai" | "gemini" | "fal";
   model: string;
-  type: "image";
+  operation: string;
   durationMs: number;
   success: boolean;
   error?: string;
+  metrics?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    thoughtsTokens?: number;
+  };
 }
 
 class Logger {
@@ -111,8 +118,8 @@ class Logger {
   logUsage(entry: UsageEntry): void {
     // Log summary to stderr
     const summary = entry.success
-      ? `image generation complete: ${entry.model}, ${entry.durationMs}ms`
-      : `image generation failed: ${entry.model}, ${entry.error}`;
+      ? `${entry.operation} complete: ${entry.model}, ${entry.durationMs}ms`
+      : `${entry.operation} failed: ${entry.model}, ${entry.error}`;
     this.info(summary);
 
     // Log detailed usage to file if configured

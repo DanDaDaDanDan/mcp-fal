@@ -495,8 +495,9 @@ export class FalImageProvider implements ImageProvider {
       // Log usage statistics
       logger.logUsage({
         timestamp: new Date().toISOString(),
+        provider: "fal",
         model,
-        type: "image",
+        operation: "generate_image",
         durationMs,
         success: true,
       });
@@ -554,8 +555,9 @@ export class FalImageProvider implements ImageProvider {
       // Log failed usage
       logger.logUsage({
         timestamp: new Date().toISOString(),
+        provider: "fal",
         model,
-        type: "image",
+        operation: "generate_image",
         durationMs,
         success: false,
         error: `${errorType}: ${errorMessage}`,
@@ -588,7 +590,31 @@ export class FalImageProvider implements ImageProvider {
     return modelInfos[model];
   }
 
+  /**
+   * Health check - verify fal.ai API connectivity
+   */
   async isAvailable(): Promise<boolean> {
-    return true;
+    try {
+      // Use a minimal subscribe call to check connectivity
+      // This validates the API key without generating an actual image
+      await withTimeout(
+        async () => {
+          // List queue status as a lightweight health check
+          const status = await fal.queue.status(FAL_MODEL_IDS.NANO_BANANA, { requestId: "health-check" });
+          // A 404 or similar error for non-existent request ID is fine - it means the API is reachable
+          return status;
+        },
+        5000
+      );
+      return true;
+    } catch (error: unknown) {
+      // If the error is "Request not found" that's actually success - API is reachable
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("not found") || message.includes("404")) {
+        return true;
+      }
+      logger.warn("Health check failed", { error: message });
+      return false;
+    }
   }
 }
