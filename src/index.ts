@@ -31,8 +31,10 @@ import {
   isSupportedImageModel,
   SUPPORTED_IMAGE_MODELS,
   ASPECT_RATIOS_WITH_AUTO,
+  RESOLUTIONS,
 } from "./types.js";
 import { logger } from "./logger.js";
+import { costTracker } from "./cost-tracker.js";
 
 // Configuration from environment - fail fast if missing
 const FAL_KEY = process.env.FAL_KEY || process.env.FAL_API_KEY;
@@ -96,6 +98,13 @@ const TOOLS = [
           description:
             "Aspect ratio for the generated image. Use 'auto' with reference_images to preserve original aspect ratio. Default: 1:1 for generation, auto for editing.",
         },
+        resolution: {
+          type: "string",
+          enum: [...RESOLUTIONS],
+          description:
+            "Output resolution. Only nano-banana-pro supports 2K and 4K. Higher resolution costs more. Default: 1K",
+          default: "1K",
+        },
       },
       required: ["prompt", "output_path"],
     },
@@ -106,6 +115,21 @@ const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "get_cost_summary",
+    description: "Get cumulative cost summary for all fal.ai API calls made through this server",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        reset: {
+          type: "boolean",
+          description: "Reset the cost tracker after returning summary (default: false)",
+          default: false,
+        },
+      },
       required: [],
     },
   },
@@ -159,12 +183,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       model,
       reference_images: referenceImages,
       aspect_ratio: aspectRatio,
+      resolution,
     } = args as {
       prompt: string;
       output_path: string;
       model?: "nano-banana" | "nano-banana-pro";
       reference_images?: string[];
       aspect_ratio?: string;
+      resolution?: "1K" | "2K" | "4K";
     };
 
     logger.info("generate_image request details", {
@@ -179,6 +205,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         return "local_file";
       }),
       aspectRatio: aspectRatio || "(default)",
+      resolution: resolution || "1K (default)",
     });
 
     // Validate prompt
@@ -231,6 +258,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         model,
         referenceImages,
         aspectRatio: aspectRatio as any,
+        resolution,
       });
 
       logger.info("generate_image completed successfully", {
@@ -252,6 +280,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           model: result.model,
           imagePath: result.imagePath,
           usage: result.usage,
+          cost: result.cost,
         },
       };
     } catch (error: unknown) {
@@ -276,6 +305,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         isError: true,
       };
     }
+  }
+
+  // Get cost summary tool
+  if (name === "get_cost_summary") {
+    const { reset } = args as { reset?: boolean };
+
+    const summary = costTracker.getSummary();
+
+    // Format cost values as dollars
+    const formatCost = (cost: number) => `$${cost.toFixed(6)}`;
+
+    const formattedSummary = {
+      totalCost: formatCost(summary.totalCost),
+      callCount: summary.callCount,
+      estimatedCosts: formatCost(summary.estimatedCosts),
+      since: summary.since,
+      byModel: Object.fromEntries(
+        Object.entries(summary.byModel).map(([k, v]) => [k, formatCost(v)])
+      ),
+      byOperation: Object.fromEntries(
+        Object.entries(summary.byOperation).map(([k, v]) => [k, formatCost(v)])
+      ),
+    };
+
+    if (reset) {
+      costTracker.reset();
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(formattedSummary, null, 2),
+        },
+      ],
+    };
   }
 
   // Unknown tool

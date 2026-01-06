@@ -91,6 +91,14 @@ export interface ImageGenerateOptions {
 // Result Types
 // ============================================================================
 
+// Cost information
+export interface CostInfo {
+  imageCost?: number;
+  totalCost: number;
+  currency: "USD";
+  estimated: boolean;
+}
+
 // Generation result
 export interface GenerateResult {
   imagePath: string;
@@ -98,6 +106,7 @@ export interface GenerateResult {
   usage?: {
     durationMs: number;
   };
+  cost?: CostInfo;
 }
 
 // Provider interface

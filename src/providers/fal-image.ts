@@ -18,6 +18,8 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync } from "fs";
 import { dirname, basename, extname } from "path";
 import { logger } from "../logger.js";
 import { withRetry, withTimeout } from "../retry.js";
+import { calculateImageCost } from "../pricing.js";
+import { costTracker } from "../cost-tracker.js";
 import {
   ImageProvider,
   ImageGenerateOptions,
@@ -502,10 +504,24 @@ export class FalImageProvider implements ImageProvider {
         success: true,
       });
 
+      // Calculate cost (resolution defaults to 1K for nano-banana)
+      const cost = calculateImageCost(model, resolution, numImages);
+
+      // Track cost
+      costTracker.trackCost({
+        timestamp: new Date().toISOString(),
+        model,
+        operation: "generate_image",
+        imageCost: cost.imageCost,
+        totalCost: cost.totalCost,
+        estimated: cost.estimated,
+      });
+
       return {
         imagePath: outputPath,
         model,
         usage: { durationMs },
+        cost,
       };
     } catch (error: unknown) {
       const durationMs = Date.now() - startTime;
